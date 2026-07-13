@@ -44,7 +44,7 @@ Use your local PostgreSQL instance and make sure the `triage` database and user 
 
 ```bash
 cd backend
-/Users/umar/triage-app/.venv/bin/python -m pip install -r requirements.txt
+/Users/hamna/triage-app/.venv/bin/python -m pip install -r requirements.txt
 ```
 
 ### 4. Install frontend dependencies
@@ -59,8 +59,8 @@ npm install
 Backend:
 
 ```bash
-cd /Users/umar/triage-app
-/Users/umar/triage-app/.venv/bin/python -m uvicorn app.main:app --port 8000 --app-dir /Users/umar/triage-app/backend
+cd /Users/hamna/triage-app
+/Users/hamna/triage-app/.venv/bin/python -m uvicorn app.main:app --port 8000 --app-dir /Users/hamna/triage-app/backend
 ```
 
 Frontend:
