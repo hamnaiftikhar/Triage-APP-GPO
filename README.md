@@ -11,6 +11,66 @@ A small full-stack MVP for telemedicine request triage. The system accepts plain
 - Shows a queue view and audit trail for clinical support.
 - Applies validation, rate limiting, and audit logging.
 
+## How the App Works
+
+Below is the end-to-end flow of a single triage request, from patient submission to clinical review.
+
+```mermaid
+sequenceDiagram
+    participant Patient
+    participant Frontend as React Dashboard
+    participant API as FastAPI Backend
+    participant Guard as Guardrails
+    participant LG as LangGraph Workflow
+    participant LLM as OpenAI / Heuristic
+    participant DB as PostgreSQL
+
+    Patient->>Frontend: Types request text
+    Frontend->>API: POST /submit-request
+    API->>Guard: Validate length + rate limit
+    Guard-->>API: Pass
+    API->>LG: Invoke triage graph
+    LG->>LLM: Classify text
+    LLM-->>LG: category + urgency
+    LG->>LG: Route to queue
+    LG-->>API: Classified state
+    API->>DB: Save request + audit event
+    API-->>Frontend: Return request reference
+    Frontend-->>Patient: Show confirmation + reference ID
+```
+
+### Step 1 — Patient submits a request
+A patient (or staff member) types a plain-text message into the web form, for example: *"I have severe chest pain and shortness of breath"*. The frontend sends this to `POST /submit-request`.
+
+### Step 2 — Validation & rate limiting
+The backend checks that the text is not empty, not too long, and that the caller has not exceeded the rate limit. Malformed or abusive requests are rejected before they reach the AI pipeline.
+
+### Step 3 — Prompt-injection filtering
+Before the request reaches the LLM, a pre-filter scans the text for known prompt-injection signatures (e.g., *"ignore all previous instructions"*). If detected, the request is safely classified as operational/P3 without ever being sent to the model.
+
+### Step 4 — AI classification via LangGraph
+The validated text enters a **LangGraph state machine** with two nodes:
+
+1. **Classifier Node** — Sends the text to OpenAI (`gpt-4o-mini`) using structured output parsing. The model returns:
+   - **Category**: `clinical` or `operational`
+   - **Urgency**: `P1` (emergency), `P2` (standard), or `P3` (low priority)
+   - If no OpenAI key is configured, a **keyword-based heuristic** fallback handles classification instead.
+
+2. **Router Node** — Based on the category, assigns the request to either the **Clinical Queue** or the **Operations Queue**.
+
+### Step 5 — Persistence in PostgreSQL
+The fully classified request (with its category, urgency, status, and queue assignment) is saved to the `triage_requests` table. An audit event is also written to the `triage_audit_log` table, recording the action, the client IP, and all classification details.
+
+### Step 6 — Clinical staff reviews the queue
+Staff members open the dashboard, authenticate with a staff token, and see the live queue sorted by creation time. They can:
+- **Approve** a request to mark it as processed.
+- **Delete** a request to remove it from the queue.
+- **View the audit trail** to see a history of all submit, approve, and delete actions.
+
+### Step 7 — Patient checks status
+After submission, the patient receives a unique **request reference ID**. They can paste this ID into the status lookup section on the dashboard to check the current state of their request at any time.
+
+
 ## Stack
 
 - Backend: Python, FastAPI, LangGraph, Pydantic, Psycopg
